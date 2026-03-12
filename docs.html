@@ -1,0 +1,654 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Reddit Scanner — Code Documentation</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f9f9fa; color: #1a1a1b; line-height: 1.6; }
+
+/* Header */
+.header { background: linear-gradient(135deg, #ff4500, #e03d00); color: white; padding: 32px 24px; text-align: center; }
+.header h1 { font-size: 28px; font-weight: 700; margin-bottom: 4px; }
+.header p { font-size: 15px; opacity: 0.9; }
+
+/* Navigation */
+.nav { background: #fff; border-bottom: 1px solid #e0e0e0; padding: 12px 24px; position: sticky; top: 0; z-index: 10; display: flex; gap: 16px; flex-wrap: wrap; justify-content: center; }
+.nav a { color: #ff4500; text-decoration: none; font-size: 14px; font-weight: 500; padding: 4px 8px; border-radius: 4px; }
+.nav a:hover { background: #fff3e0; }
+
+/* Container */
+.container { max-width: 860px; margin: 0 auto; padding: 24px; }
+
+/* Section */
+.section { background: white; border-radius: 10px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); margin-bottom: 24px; overflow: hidden; }
+.section-header { padding: 20px 24px; border-bottom: 1px solid #f0f0f0; }
+.section-header h2 { font-size: 20px; color: #1a1a1b; display: flex; align-items: center; gap: 10px; }
+.section-header .badge { display: inline-block; padding: 3px 10px; border-radius: 4px; font-size: 11px; font-weight: 700; text-transform: uppercase; }
+.badge-py { background: #e3f2fd; color: #1565c0; }
+.badge-bat { background: #e8f5e9; color: #2e7d32; }
+.badge-json { background: #fff3e0; color: #e65100; }
+.section-body { padding: 20px 24px; }
+.section-body p { margin-bottom: 12px; font-size: 15px; }
+
+/* Architecture diagram */
+.arch-diagram { background: #fafafa; border: 1px solid #e0e0e0; border-radius: 8px; padding: 24px; font-family: 'Consolas', 'Monaco', monospace; font-size: 13px; line-height: 1.8; white-space: pre; overflow-x: auto; text-align: center; margin: 12px 0; }
+
+/* Details (expandable) */
+details { margin-top: 12px; border: 1px solid #e8e8e8; border-radius: 6px; }
+details + details { margin-top: 8px; }
+summary { padding: 10px 16px; cursor: pointer; font-weight: 600; font-size: 14px; color: #333; background: #fafafa; border-radius: 6px; user-select: none; }
+summary:hover { background: #f0f0f0; }
+details[open] summary { border-radius: 6px 6px 0 0; border-bottom: 1px solid #e8e8e8; }
+.details-body { padding: 14px 16px; font-size: 14px; }
+
+/* Function list */
+.func { margin-bottom: 14px; padding-bottom: 14px; border-bottom: 1px solid #f5f5f5; }
+.func:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
+.func-name { font-family: 'Consolas', 'Monaco', monospace; font-weight: 700; color: #d63384; font-size: 14px; }
+.func-line { font-size: 12px; color: #888; margin-left: 6px; }
+.func-desc { margin-top: 4px; color: #444; font-size: 13px; }
+
+/* Highlight box */
+.highlight { background: #fff8e1; border-left: 4px solid #ff9800; padding: 12px 16px; border-radius: 0 6px 6px 0; margin: 12px 0; font-size: 14px; }
+
+/* Flow list */
+.flow-list { list-style: none; padding: 0; counter-reset: flow; }
+.flow-list li { padding: 6px 0 6px 36px; position: relative; font-size: 14px; }
+.flow-list li::before { counter-increment: flow; content: counter(flow); position: absolute; left: 0; top: 6px; width: 24px; height: 24px; background: #ff4500; color: white; border-radius: 50%; font-size: 12px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+
+/* Print */
+@media print {
+  .nav { display: none; }
+  .section { break-inside: avoid; box-shadow: none; border: 1px solid #ddd; }
+  details { open: true; }
+  body { background: white; }
+}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>Reddit Scanner</h1>
+  <p>Code Documentation</p>
+</div>
+
+<nav class="nav">
+  <a href="#architecture">Architecture</a>
+  <a href="#web-ui">web_ui.py</a>
+  <a href="#reddit-scan">reddit_scan.py</a>
+  <a href="#reddit-auth">reddit_auth.py</a>
+  <a href="#reddit-login">reddit_login.py</a>
+  <a href="#batch-files">Batch Files</a>
+  <a href="#presets">presets.json</a>
+</nav>
+
+<div class="container">
+
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<!-- ARCHITECTURE -->
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+
+<div class="section" id="architecture">
+  <div class="section-header">
+    <h2>Architecture Overview</h2>
+  </div>
+  <div class="section-body">
+    <p>Everything runs locally. No cloud services except the public search APIs and OpenRouter for AI filtering.</p>
+    <div class="arch-diagram">
+  Browser (localhost:5000)
+          |
+          v
+  +--------------+
+  |  web_ui.py   |  HTTP server + embedded frontend
+  +--------------+
+     |         |
+     v         v
+  Search    Login
+     |         |
+     v         v
+  +------------------+     +-------------------+
+  | reddit_scan.py   |     | reddit_login.py   |
+  | (subprocess)     |     | (subprocess)      |
+  +------------------+     +-------------------+
+     |    |    |                    |
+     v    v    v                    v
+  Reddit  PullPush  Arctic      reddit_auth.py
+  .json   API       Shift       (Playwright browser)
+  API                  |
+     \    |    /       |
+      v   v   v       v
+    OpenRouter LLM   reddit_session.json
+    (AI filter)      (saved cookies)
+    </div>
+
+    <p><strong>How a search works end-to-end:</strong></p>
+    <ol class="flow-list">
+      <li>User types a query in the browser and clicks <strong>Search</strong></li>
+      <li><code>web_ui.py</code> receives the HTTP request and runs <code>reddit_scan.py</code> as a subprocess</li>
+      <li><code>reddit_scan.py</code> fetches raw results from Reddit, PullPush, and/or Arctic Shift APIs</li>
+      <li>Raw results are sent to an AI model (Kimi K2.5 via OpenRouter) for relevance filtering</li>
+      <li>If not enough relevant results, it paginates backward and repeats (iterative loop)</li>
+      <li>Filtered results are returned as JSON to <code>web_ui.py</code></li>
+      <li><code>web_ui.py</code> sends the JSON to the browser, which renders result cards</li>
+    </ol>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<!-- WEB_UI.PY -->
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+
+<div class="section" id="web-ui">
+  <div class="section-header">
+    <h2><span class="badge badge-py">Python</span> web_ui.py</h2>
+  </div>
+  <div class="section-body">
+    <p>
+      The <strong>entire web application</strong> in a single file (~611 lines). Contains the HTTP server (backend)
+      and the full HTML/CSS/JavaScript frontend embedded as a string. No frameworks, no npm, no build step.
+    </p>
+    <p>
+      Runs on <code>localhost:5000</code>. The server is multi-threaded so it can handle multiple browser
+      requests at once. All search/login operations are done by running Python scripts as subprocesses.
+    </p>
+
+    <div class="highlight">
+      <strong>Key concept:</strong> The web UI never calls APIs directly. It spawns <code>reddit_scan.py</code>
+      and <code>reddit_login.py</code> as subprocesses and reads their output. This keeps the UI simple and
+      the search logic fully testable from the command line.
+    </div>
+
+    <details>
+      <summary>API Endpoints</summary>
+      <div class="details-body">
+        <div class="func">
+          <span class="func-name">GET /</span>
+          <div class="func-desc">Serves the HTML page (the entire frontend is embedded in the Python file as <code>HTML_PAGE</code>).</div>
+        </div>
+        <div class="func">
+          <span class="func-name">GET /api/search?q=...&amp;time=...&amp;sort=...&amp;limit=...&amp;filter=1</span>
+          <div class="func-desc">Runs <code>reddit_scan.py</code> as a subprocess with the given parameters. Returns <code>{"results": [...]}</code>. Timeout: 300 seconds.</div>
+        </div>
+        <div class="func">
+          <span class="func-name">GET /api/reddit-status</span>
+          <div class="func-desc">Runs <code>reddit_login.py --status</code>. Returns <code>{"valid": true/false, "username": "..."}</code>.</div>
+        </div>
+        <div class="func">
+          <span class="func-name">POST /api/reddit-login</span>
+          <div class="func-desc">Starts <code>reddit_login.py</code> in a background thread (opens a browser window for manual login). Returns immediately.</div>
+        </div>
+        <div class="func">
+          <span class="func-name">POST /api/reddit-logout</span>
+          <div class="func-desc">Runs <code>reddit_login.py --logout</code> to delete the saved session.</div>
+        </div>
+        <div class="func">
+          <span class="func-name">GET /api/presets</span>
+          <div class="func-desc">Returns the saved searches from <code>presets.json</code>.</div>
+        </div>
+        <div class="func">
+          <span class="func-name">POST /api/presets</span>
+          <div class="func-desc">Saves a new search preset (query, time, sort, limit).</div>
+        </div>
+        <div class="func">
+          <span class="func-name">DELETE /api/presets/:id</span>
+          <div class="func-desc">Removes a preset by its index.</div>
+        </div>
+      </div>
+    </details>
+
+    <details>
+      <summary>Technical Details — Classes &amp; Functions</summary>
+      <div class="details-body">
+        <div class="func">
+          <span class="func-name">class ThreadedHTTPServer</span> <span class="func-line">line 44</span>
+          <div class="func-desc">Multi-threaded HTTP server. Extends Python's built-in <code>HTTPServer</code> with threading so multiple requests can be served at once.</div>
+        </div>
+        <div class="func">
+          <span class="func-name">handle_error()</span> <span class="func-line">line 47</span>
+          <div class="func-desc">Silently ignores connection-reset errors (e.g., browser health checks disconnecting mid-request). Lets real errors through.</div>
+        </div>
+        <div class="func">
+          <span class="func-name">load_presets()</span> <span class="func-line">line 61</span>
+          <div class="func-desc">Reads <code>presets.json</code> from disk. Returns empty list if file is missing or corrupt.</div>
+        </div>
+        <div class="func">
+          <span class="func-name">save_presets()</span> <span class="func-line">line 69</span>
+          <div class="func-desc">Writes the presets list to <code>presets.json</code>.</div>
+        </div>
+        <div class="func">
+          <span class="func-name">class Handler</span> <span class="func-line">line 392</span>
+          <div class="func-desc">HTTP request handler. Every incoming request (GET/POST/DELETE) is routed through this class.</div>
+        </div>
+        <div class="func">
+          <span class="func-name">_json() / _html()</span> <span class="func-line">lines 396, 404</span>
+          <div class="func-desc">Helper methods that send JSON or HTML responses with proper headers and encoding.</div>
+        </div>
+        <div class="func">
+          <span class="func-name">do_GET() / do_POST() / do_DELETE()</span> <span class="func-line">lines 412, 428, 459</span>
+          <div class="func-desc">HTTP method handlers. Route requests to the appropriate handler based on the URL path.</div>
+        </div>
+        <div class="func">
+          <span class="func-name">_handle_search()</span> <span class="func-line">line 478</span>
+          <div class="func-desc">Builds the command line for <code>reddit_scan.py</code>, runs it as a subprocess with 300s timeout, parses the JSON stdout, and returns results. Extracts user-friendly error messages from stderr on failure.</div>
+        </div>
+        <div class="func">
+          <span class="func-name">_handle_reddit_status()</span> <span class="func-line">line 546</span>
+          <div class="func-desc">Runs <code>reddit_login.py --status</code>, parses stdout to check login status.</div>
+        </div>
+        <div class="func">
+          <span class="func-name">_handle_reddit_login()</span> <span class="func-line">line 565</span>
+          <div class="func-desc">Spawns login script in a background thread so the HTTP response returns immediately while the browser window opens.</div>
+        </div>
+        <div class="func">
+          <span class="func-name">_handle_reddit_logout()</span> <span class="func-line">line 581</span>
+          <div class="func-desc">Runs <code>reddit_login.py --logout</code> to delete the saved session file.</div>
+        </div>
+        <div class="func">
+          <span class="func-name">main()</span> <span class="func-line">line 596</span>
+          <div class="func-desc">Creates the server on port 5000 and starts serving. Ctrl+C shuts it down cleanly.</div>
+        </div>
+      </div>
+    </details>
+
+    <details>
+      <summary>Technical Details — Frontend (embedded JavaScript)</summary>
+      <div class="details-body">
+        <p>The frontend is a single HTML page embedded in the Python file as the <code>HTML_PAGE</code> constant (line 78). Key JavaScript functions:</p>
+        <div class="func">
+          <span class="func-name">doSearch()</span>
+          <div class="func-desc">Main search function. Reads form values, sends GET request to <code>/api/search</code>, renders result cards or error.</div>
+        </div>
+        <div class="func">
+          <span class="func-name">renderCard(r)</span>
+          <div class="func-desc">Builds the HTML for one result card — shows type badge (post/comment), title, subreddit, score, time, and snippet. Clicking opens the Reddit link.</div>
+        </div>
+        <div class="func">
+          <span class="func-name">checkRedditStatus() / redditLogin() / redditLogout()</span>
+          <div class="func-desc">Manage the Reddit connection bar at the top of the page. Login opens a browser window and polls every 3 seconds until complete.</div>
+        </div>
+        <div class="func">
+          <span class="func-name">loadPresets() / savePreset() / removePreset()</span>
+          <div class="func-desc">CRUD operations for saved searches. Displayed as clickable chips above the search box.</div>
+        </div>
+        <div class="func">
+          <span class="func-name">escHtml(s)</span>
+          <div class="func-desc">Escapes HTML special characters (<code>&amp; &lt; &gt; " '</code>) to prevent injection.</div>
+        </div>
+      </div>
+    </details>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<!-- REDDIT_SCAN.PY -->
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+
+<div class="section" id="reddit-scan">
+  <div class="section-header">
+    <h2><span class="badge badge-py">Python</span> scripts/reddit_scan.py</h2>
+  </div>
+  <div class="section-body">
+    <p>
+      The <strong>core search engine</strong> (~940 lines). A command-line tool that searches Reddit for posts
+      and comments about any topic, optionally filters them with AI, and outputs results as JSON or text.
+    </p>
+    <p>
+      Uses three free data sources that require <strong>no API key</strong>:
+    </p>
+    <ul style="margin: 8px 0 12px 24px; font-size: 15px;">
+      <li><strong>Reddit .json API</strong> — Reddit's own public search (primary for posts)</li>
+      <li><strong>PullPush API</strong> — Third-party Pushshift successor (primary for comments, fallback for posts)</li>
+      <li><strong>Arctic Shift API</strong> — Third-party Reddit archive (fallback for comments)</li>
+    </ul>
+
+    <div class="highlight">
+      <strong>Key concept — Automatic fallback:</strong> If the primary API fails or returns nothing, it
+      silently switches to the backup. The user never sees the switch.
+      <br><br>
+      <strong>Key concept — The iterative AI filter loop:</strong> Fetches a batch of results, sends them
+      to an AI model for relevance filtering, and if not enough pass the filter, paginates backward to fetch
+      more. Adapts the fetch size based on the hit rate from the previous round.
+    </div>
+
+    <details>
+      <summary>Search Modes &amp; CLI Flags</summary>
+      <div class="details-body">
+        <p>The script supports three search modes:</p>
+        <div class="func">
+          <span class="func-name">Posts only</span> (default)
+          <div class="func-desc">Searches for Reddit posts. Uses Reddit API with PullPush as fallback.</div>
+        </div>
+        <div class="func">
+          <span class="func-name">Comments only</span> (<code>--comments-only</code>)
+          <div class="func-desc">Searches for comments. Uses PullPush with Arctic Shift as fallback.</div>
+        </div>
+        <div class="func">
+          <span class="func-name">Deep</span> (<code>--deep</code>)
+          <div class="func-desc">Searches both posts and comments in parallel (2 threads), merges and sorts by score.</div>
+        </div>
+        <p style="margin-top: 12px;"><strong>Other flags:</strong></p>
+        <ul style="margin: 4px 0 0 20px; font-size: 14px; line-height: 2;">
+          <li><code>--filter</code> — Enable AI relevance filtering (requires OpenRouter key)</li>
+          <li><code>--time</code> — hour / day / week / month / year / all</li>
+          <li><code>--sort</code> — relevance / new / hot / top / comments</li>
+          <li><code>--limit N</code> — Max results (1–500)</li>
+          <li><code>--min-score N</code> — Only include results with at least N upvotes</li>
+          <li><code>--json</code> — Output as JSON array</li>
+          <li><code>--output file.json</code> — Write results to file</li>
+        </ul>
+      </div>
+    </details>
+
+    <details>
+      <summary>How the AI Filter Works</summary>
+      <div class="details-body">
+        <p>When <code>--filter</code> is enabled, results go through an LLM relevance check before being returned:</p>
+        <ol class="flow-list">
+          <li>Fetch a batch of raw results from the APIs</li>
+          <li>Format them into a compact prompt listing each result's title, subreddit, and snippet</li>
+          <li>Send to <strong>Kimi K2.5</strong> (via OpenRouter) with the instruction: "Given this search intent, which results are genuinely relevant?"</li>
+          <li>The model responds with a JSON array of indices, e.g. <code>[0, 2, 5]</code></li>
+          <li>Only those results are kept; the rest are discarded</li>
+        </ol>
+        <p style="margin-top: 12px;">
+          The API key is auto-discovered from the OpenClaw config — no separate setup needed.
+        </p>
+      </div>
+    </details>
+
+    <details>
+      <summary>How the Iterative Loop Works</summary>
+      <div class="details-body">
+        <p>If a single fetch+filter round doesn't produce enough relevant results, it loops:</p>
+        <ol class="flow-list">
+          <li><strong>Fetch</strong> — Get results from the APIs</li>
+          <li><strong>Dedup</strong> — Skip any results already seen in previous rounds (by URL)</li>
+          <li><strong>Filter</strong> — Send new results to the AI, keep only relevant ones</li>
+          <li><strong>Enough?</strong> — If we have the requested number, stop</li>
+          <li><strong>Adapt</strong> — Calculate the next fetch size based on hit rate (e.g., if 40% passed, fetch ~2.5x more next round)</li>
+          <li><strong>Paginate</strong> — Use <code>before</code> timestamp (oldest result from this batch) to request only older/unseen results</li>
+          <li><strong>Repeat</strong> — Go to step 1</li>
+        </ol>
+        <p style="margin-top: 12px;"><strong>Safety limits:</strong></p>
+        <ul style="margin: 4px 0 0 20px; font-size: 14px; line-height: 2;">
+          <li>Time wall: 180 seconds per 25 requested results (minimum 60s)</li>
+          <li>Maximum 10 rounds</li>
+          <li>Fetch size capped at 100 per round (API maximum)</li>
+        </ul>
+      </div>
+    </details>
+
+    <details>
+      <summary>Technical Details — All Functions</summary>
+      <div class="details-body">
+
+        <p style="font-weight:600; margin-bottom:10px; color:#888; text-transform:uppercase; font-size:12px;">Utilities</p>
+        <div class="func">
+          <span class="func-name">eprint()</span> <span class="func-line">line 49</span>
+          <div class="func-desc">Prints to stderr. Used for progress/debug messages so they don't mix with JSON output on stdout.</div>
+        </div>
+        <div class="func">
+          <span class="func-name">fetch_json()</span> <span class="func-line">line 57</span>
+          <div class="func-desc">Fetches a URL and parses JSON. Retries up to 3 times on 429 (rate limit) with exponential backoff.</div>
+        </div>
+        <div class="func">
+          <span class="func-name">time_ago()</span> <span class="func-line">line 75</span>
+          <div class="func-desc">Converts Unix timestamp to human-readable relative time ("3h ago", "5d ago", "2mo ago").</div>
+        </div>
+        <div class="func">
+          <span class="func-name">truncate()</span> <span class="func-line">line 99</span>
+          <div class="func-desc">Cuts text to 200 characters, adds "..." if truncated.</div>
+        </div>
+        <div class="func">
+          <span class="func-name">_normalize_subreddit()</span> <span class="func-line">line 107</span>
+          <div class="func-desc">Ensures subreddit has "r/" prefix. <code>"python"</code> &rarr; <code>"r/python"</code>.</div>
+        </div>
+        <div class="func">
+          <span class="func-name">_make_post_dict() / _make_comment_dict()</span> <span class="func-line">lines 114, 132</span>
+          <div class="func-desc">Build standardized result dictionaries with all fields (type, title, subreddit, score, url, snippet, etc.).</div>
+        </div>
+        <div class="func">
+          <span class="func-name">_build_keyword_patterns()</span> <span class="func-line">line 149</span>
+          <div class="func-desc">Builds regex patterns from the query for keyword matching. Handles word suffixes (s, ed, ing, er) and ignores stop words.</div>
+        </div>
+
+        <p style="font-weight:600; margin: 18px 0 10px; color:#888; text-transform:uppercase; font-size:12px;">Data Source Functions</p>
+        <div class="func">
+          <span class="func-name">_arctic_search_comments()</span> <span class="func-line">line 173</span>
+          <div class="func-desc">Searches comments via Arctic Shift. Strategy: find relevant posts first, extract post IDs, fetch all comments for those posts in parallel (5 threads), keyword-filter locally.</div>
+        </div>
+        <div class="func">
+          <span class="func-name">_pullpush_search_posts()</span> <span class="func-line">line 280</span>
+          <div class="func-desc">Searches posts via PullPush API. Paginates using <code>before</code> timestamp. Max 100 per page. Deduplicates by post ID.</div>
+        </div>
+        <div class="func">
+          <span class="func-name">_pullpush_search_comments()</span> <span class="func-line">line 362</span>
+          <div class="func-desc">Searches comments via PullPush API. Same pagination pattern as posts. Sorts results by score.</div>
+        </div>
+        <div class="func">
+          <span class="func-name">_reddit_search_posts()</span> <span class="func-line">line 442</span>
+          <div class="func-desc">Searches posts via Reddit's public <code>.json</code> API. Uses Reddit's cursor-based pagination.</div>
+        </div>
+
+        <p style="font-weight:600; margin: 18px 0 10px; color:#888; text-transform:uppercase; font-size:12px;">Public Search API (with fallbacks)</p>
+        <div class="func">
+          <span class="func-name">search_posts()</span> <span class="func-line">line 497</span>
+          <div class="func-desc">Tries Reddit first, falls back to PullPush if Reddit fails or returns empty.</div>
+        </div>
+        <div class="func">
+          <span class="func-name">search_comments()</span> <span class="func-line">line 516</span>
+          <div class="func-desc">Tries PullPush first, falls back to Arctic Shift if PullPush fails or returns empty.</div>
+        </div>
+        <div class="func">
+          <span class="func-name">_fetch_by_mode()</span> <span class="func-line">line 534</span>
+          <div class="func-desc">Dispatches to the right function based on mode: "posts" &rarr; <code>search_posts()</code>, "comments" &rarr; <code>search_comments()</code>, "deep" &rarr; both in parallel.</div>
+        </div>
+
+        <p style="font-weight:600; margin: 18px 0 10px; color:#888; text-transform:uppercase; font-size:12px;">LLM Filter</p>
+        <div class="func">
+          <span class="func-name">_get_openrouter_key()</span> <span class="func-line">line 589</span>
+          <div class="func-desc">Finds the OpenRouter API key. Checks environment variable first, then reads from OpenClaw's auth config.</div>
+        </div>
+        <div class="func">
+          <span class="func-name">_call_openrouter()</span> <span class="func-line">line 611</span>
+          <div class="func-desc">Sends a chat completion request to OpenRouter (Kimi K2.5, temperature 0, low reasoning effort). Retries if the model returns empty content.</div>
+        </div>
+        <div class="func">
+          <span class="func-name">_build_filter_prompt()</span> <span class="func-line">line 665</span>
+          <div class="func-desc">Formats results into a compact prompt listing each result with index, type, title, subreddit, and snippet.</div>
+        </div>
+        <div class="func">
+          <span class="func-name">filter_results_llm()</span> <span class="func-line">line 699</span>
+          <div class="func-desc">The LLM filter. Batches results (50 per batch), sends to LLM, parses the JSON array response, returns only relevant results.</div>
+        </div>
+
+        <p style="font-weight:600; margin: 18px 0 10px; color:#888; text-transform:uppercase; font-size:12px;">Iterative Loop &amp; Main</p>
+        <div class="func">
+          <span class="func-name">search_and_filter()</span> <span class="func-line">line 750</span>
+          <div class="func-desc">The iterative search+filter loop. Fetches, deduplicates, filters via LLM, adapts fetch size, paginates backward, repeats until the limit is met or the time wall is hit.</div>
+        </div>
+        <div class="func">
+          <span class="func-name">format_text()</span> <span class="func-line">line 553</span>
+          <div class="func-desc">Formats results as human-readable numbered text (for CLI output, not JSON mode).</div>
+        </div>
+        <div class="func">
+          <span class="func-name">main()</span> <span class="func-line">line 833</span>
+          <div class="func-desc">CLI entry point. Parses arguments, picks the search mode, runs the search (with or without filter), outputs results.</div>
+        </div>
+      </div>
+    </details>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<!-- REDDIT_AUTH.PY -->
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+
+<div class="section" id="reddit-auth">
+  <div class="section-header">
+    <h2><span class="badge badge-py">Python</span> scripts/reddit_auth.py</h2>
+  </div>
+  <div class="section-body">
+    <p>
+      <strong>Reddit session management</strong> (~184 lines). Handles logging into Reddit using a real browser
+      window (Playwright), saving cookies to disk, and checking login status.
+    </p>
+    <p>
+      The login isn't required for searching (all searches use public APIs). It's used for features
+      that need an authenticated Reddit session.
+    </p>
+
+    <details>
+      <summary>How Login Works</summary>
+      <div class="details-body">
+        <ol class="flow-list">
+          <li>Opens a visible Chromium browser window to <code>reddit.com/login</code></li>
+          <li>User manually enters their Reddit credentials</li>
+          <li>Script polls every 2 seconds, checking for: URL changed away from /login, or <code>reddit_session</code> cookie appeared</li>
+          <li>Once login detected, opens <code>/api/me.json</code> in a hidden tab to get the username</li>
+          <li>Saves all cookies + username to <code>reddit_session.json</code></li>
+          <li>Closes the browser automatically</li>
+        </ol>
+        <p style="margin-top: 8px;">Timeout: 5 minutes. If the user doesn't log in, it gives up.</p>
+      </div>
+    </details>
+
+    <details>
+      <summary>Technical Details — All Functions</summary>
+      <div class="details-body">
+        <div class="func">
+          <span class="func-name">load_session()</span> <span class="func-line">line 28</span>
+          <div class="func-desc">Reads <code>reddit_session.json</code> from disk. Returns the dict if it has cookies, otherwise <code>None</code>.</div>
+        </div>
+        <div class="func">
+          <span class="func-name">save_session()</span> <span class="func-line">line 41</span>
+          <div class="func-desc">Writes cookies, username, and timestamp to <code>reddit_session.json</code>.</div>
+        </div>
+        <div class="func">
+          <span class="func-name">delete_session()</span> <span class="func-line">line 54</span>
+          <div class="func-desc">Deletes the session file from disk.</div>
+        </div>
+        <div class="func">
+          <span class="func-name">validate_session()</span> <span class="func-line">line 66</span>
+          <div class="func-desc">Checks if a saved session exists and has cookies + username. Returns <code>{"valid": true/false, "username": ...}</code>. Does not make network calls (avoids triggering Reddit's bot detection).</div>
+        </div>
+        <div class="func">
+          <span class="func-name">run_login_browser()</span> <span class="func-line">line 87</span>
+          <div class="func-desc">Opens Chromium, polls for login, verifies with <code>/api/me.json</code>, saves session, closes browser. Returns the username on success.</div>
+        </div>
+      </div>
+    </details>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<!-- REDDIT_LOGIN.PY -->
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+
+<div class="section" id="reddit-login">
+  <div class="section-header">
+    <h2><span class="badge badge-py">Python</span> scripts/reddit_login.py</h2>
+  </div>
+  <div class="section-body">
+    <p>
+      <strong>Login CLI wrapper</strong> (~57 lines). A thin command-line interface around <code>reddit_auth.py</code>.
+      This is what <code>web_ui.py</code> calls as a subprocess.
+    </p>
+
+    <details>
+      <summary>Technical Details</summary>
+      <div class="details-body">
+        <div class="func">
+          <span class="func-name">main()</span> <span class="func-line">line 21</span>
+          <div class="func-desc">
+            Three modes:<br>
+            &bull; <code>python reddit_login.py</code> — Opens browser for login<br>
+            &bull; <code>python reddit_login.py --status</code> — Prints "Logged in as u/..." or "Not logged in"<br>
+            &bull; <code>python reddit_login.py --logout</code> — Deletes saved session
+          </div>
+        </div>
+      </div>
+    </details>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<!-- BATCH FILES -->
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+
+<div class="section" id="batch-files">
+  <div class="section-header">
+    <h2><span class="badge badge-bat">BAT</span> Batch Files</h2>
+  </div>
+  <div class="section-body">
+
+    <div class="func">
+      <span class="func-name">install.bat</span>
+      <div class="func-desc">
+        One-click setup. Checks if Python is installed — if not, <strong>automatically downloads and installs Python 3.12</strong>.
+        Then installs Playwright and the Chromium browser (needed for the Reddit login feature). Only needs to be run once.
+      </div>
+    </div>
+
+    <div class="func">
+      <span class="func-name">start.bat</span>
+      <div class="func-desc">
+        Launches the web server in the background, waits up to 10 seconds for it to be ready (polls port 5000),
+        then automatically opens <code>http://localhost:5000</code> in the user's default browser.
+        Keeping the terminal window open keeps the server running.
+      </div>
+    </div>
+
+    <div class="func">
+      <span class="func-name">stop.bat</span>
+      <div class="func-desc">
+        Safety net — finds and kills whatever process is listening on port 5000. Useful if the terminal window
+        was closed accidentally and the server is still running in the background.
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<!-- PRESETS.JSON -->
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+
+<div class="section" id="presets">
+  <div class="section-header">
+    <h2><span class="badge badge-json">JSON</span> presets.json</h2>
+  </div>
+  <div class="section-body">
+    <p>
+      Stores saved searches. Starts as an empty array <code>[]</code>. When a user saves a search from the web UI,
+      it adds an entry with the query, time filter, sort order, and limit. Persists across restarts.
+    </p>
+    <p>Example after saving two searches:</p>
+    <div class="arch-diagram" style="text-align: left; font-size: 13px;">
+[
+  {
+    "query": "best crm for startups",
+    "time": "month",
+    "sort": "relevance",
+    "limit": 25
+  },
+  {
+    "query": "python web framework 2026",
+    "time": "week",
+    "sort": "top",
+    "limit": 50
+  }
+]</div>
+  </div>
+</div>
+
+</div>
+
+<div style="text-align:center; padding: 24px; color: #999; font-size: 13px;">
+  Reddit Scanner &mdash; Code Documentation
+</div>
+
+</body>
+</html>

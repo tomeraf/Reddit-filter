@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.pyc
+
+# Claude Code
+.claude/
+.mcp.json
+
+# Playwright MCP artifacts
+.playwright-mcp/
+
+# Runtime files
+scanner.log
+reddit_session.json
+
+# Build artifacts
+reddit-scanner.zip
+
+# Windows junk
+nul
+Thumbs.db
+Desktop.ini
